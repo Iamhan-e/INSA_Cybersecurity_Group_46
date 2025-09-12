@@ -66,19 +66,5 @@ The NAC system features:
 
 
 
- Getting Started
 
- Prerequisites
-
-- Node.js / Python installed
-- Database system installed and configured
-- Optional: Network simulation environment for testing
-
- Installation
-
-1. Clone this repository:
-
-```bash
-git clone https://github.com/yourusername/smart-campus-nac.git
-cd smart-campus-nac
 
