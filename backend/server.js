@@ -1,7 +1,7 @@
 import express from 'express';
-import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import connectDB from './config/database.js';
 
 // Load environment variables
 dotenv.config();
@@ -14,22 +14,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// MongoDB connection
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  }
-};
-
 // Connect to MongoDB
 connectDB();
 
 // Basic route
 app.get('/', (req, res) => {
+
+  res.send("API IS WORKING")
   res.json({ message: 'Server is running!' });
 });
 
