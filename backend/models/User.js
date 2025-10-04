@@ -28,7 +28,9 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: 'active',
     enum: ['active', 'blocked']
-  }
+  },
+
+  devices: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Device' }]
 }, {
   timestamps: true
 });
