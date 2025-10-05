@@ -2,8 +2,9 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
-import User from './models/User.js';
+import User from '../models/User.js';
 import Device from './models/Device.js';
+
 
 async function testModels() {
   try {
