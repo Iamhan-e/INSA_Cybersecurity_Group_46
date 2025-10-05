@@ -5,8 +5,10 @@ import dotenv from 'dotenv';
 import helmet from 'helmet';
 import userRoutes from './routes/userRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
+import connectDB from './config/database.js';
 
-dotenv.config();
+dotenv.config({ path: './.env' });
+
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -20,16 +22,8 @@ app.use(express.urlencoded({ extended: true }));
 const allowedOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
 app.use(cors({ origin: allowedOrigin, credentials: true }));
 
-// MongoDB connection
-const connectDB = async () => {
-  try {
-    await mongoose.connect(process.env.MONGODB_URI);
-    console.log('MongoDB connected successfully');
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    process.exit(1);
-  }
-};
+
+
 
 connectDB();
 
