@@ -19,9 +19,20 @@ const deviceSchema = new mongoose.Schema({
     type: String,
     default: 'active',
     enum: ['active', 'blocked']
-  }
+  },
+  lastSeen: {
+  type: Date,
+  default: Date.now
+},
+devices: [{
+  type: mongoose.Schema.Types.ObjectId,
+  ref: 'Device'
+}]
+
+
 }, {
   timestamps: true
+
 });
 
 const Device = mongoose.model('Device', deviceSchema);

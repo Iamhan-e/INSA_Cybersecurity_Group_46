@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { registerDevice, listDevices } from '../controllers/deviceController.js';
+import { registerDevice, listDevices } from '../controller/deviceController.js';
 
 const router = Router();
 
