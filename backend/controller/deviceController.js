@@ -1,5 +1,5 @@
-import Device from '../models/Device.js';
-import User from '../models/User.js';
+import Device from './models/Device.js';
+import User from './models/User.js';
 
 export const registerDevice = async (req, res) => {
   try {
