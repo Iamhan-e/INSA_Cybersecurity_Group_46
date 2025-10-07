@@ -30,6 +30,12 @@ const userSchema = new mongoose.Schema({
     enum: ['active', 'blocked']
   },
 
+  role: {
+    type: String,
+    default: 'user',
+    enum: ['user', 'operator', 'admin']
+  },
+
   devices: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Device' }]
 }, {
   timestamps: true
@@ -41,8 +47,8 @@ userSchema.pre('save', async function(next) {
   if (!this.isModified('password')) return next();
   
   try {
-    // Hash password with salt rounds = 10
-    const salt = await bcrypt.genSalt(10);
+    // Hash password with salt rounds = 12
+    const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
     next();
   } catch (error) {
