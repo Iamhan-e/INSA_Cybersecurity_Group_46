@@ -6,36 +6,84 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// ============================================================
-// 🔑 JWT Token Generator
-// ============================================================
-const signToken = (user) => {
-  const payload = { id: user._id, userId: user.userId || user.studentId, role: user.role };
-  const secret = process.env.JWT_SECRET;
-  const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
-  return jwt.sign(payload, secret, { expiresIn });
+const isProd = process.env.NODE_ENV === 'production';
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'dev_access_secret';
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret';
+const ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES || (isProd ? '15m' : '30m');
+const REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES || '7d';
+const MAX_DEVICES_PER_USER = Number(process.env.MAX_DEVICES_PER_USER || 5);
+
+const isStrongPassword = (pwd) => {
+  if (typeof pwd !== 'string') return false;
+  if (pwd.length < 8) return false;
+  const hasLetter = /[A-Za-z]/.test(pwd);
+  const hasNumber = /\d/.test(pwd);
+  return hasLetter && hasNumber;
 };
 
-// ============================================================
-// 🧍 Register User
-// ============================================================
+const createAccessToken = (user) => {
+  const payload = { id: user._id, studentId: user.studentId, role: user.role };
+  return jwt.sign(payload, ACCESS_SECRET, { expiresIn: ACCESS_EXPIRES_IN });
+};
+
+const createRefreshToken = (user) => {
+  const payload = { id: user._id, tokenType: 'refresh' };
+  return jwt.sign(payload, REFRESH_SECRET, { expiresIn: REFRESH_EXPIRES_IN });
+};
+
+const setRefreshCookie = (res, token) => { 
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const maxAge = 7 * oneDayMs;
+  res.cookie('refreshToken', token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: 'lax',
+    path: '/',
+    maxAge
+  });
+};//secure HTTP-only cookie on the client's browser.
+
+const getTokenFromHeader = (req) => {
+  const auth = req.headers.authorization || '';
+  if (!auth.startsWith('Bearer ')) return null;
+  return auth.slice(7);
+};
+
+export const requireAuth = (req, res, next) => {
+  try {
+    const token = getTokenFromHeader(req);
+    if (!token) return res.status(401).json({ success: false, message: 'Missing access token' });
+    const decoded = jwt.verify(token, ACCESS_SECRET);
+    req.user = { id: decoded.id, role: decoded.role, studentId: decoded.studentId };
+    return next();
+  } catch (err) {
+    return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+  }
+};
+
+export const authorizeRoles = (...roles) => (req, res, next) => {
+  if (!roles.includes(req.user?.role)) {
+    return res.status(403).json({ success: false, message: 'Not authorized to perform this action' });
+  }
+  next();
+};
+
 export const register = async (req, res) => {
   try {
-    const { userId, studentId, name, email, password, role } = req.body;
-
-    // accept either "studentId" or "userId"
-    const identifier = userId || studentId;
-    if (!identifier || !name || !password) {
-      return res.status(400).json({ success: false, message: 'userId (or studentId), name, and password are required' });
+    const { studentId, name, email, password, role } = req.body;
+    if (!studentId || !name || !password) {
+      return res.status(400).json({ success: false, message: 'studentId, name and password are required' });
+    }
+    if (!isStrongPassword(password)) {
+      return res.status(400).json({ success: false, message: 'Password must be at least 8 chars and include letters and numbers' });
     }
 
-    const existing = await User.findOne({ studentId: identifier });
+    const existing = await User.findOne({ studentId });
     if (existing) {
-      return res.status(409).json({ success: false, message: 'User already registered' });
+      return res.status(409).json({ success: false, message: 'User already exists' });
     }
 
-    const user = await User.create({ studentId: identifier, name, email, password, role });
-
+    const user = await User.create({ studentId, name, email, password, role });
     return res.status(201).json({
       success: true,
       message: 'User registered successfully',
@@ -46,66 +94,69 @@ export const register = async (req, res) => {
   }
 };
 
-// ============================================================
-// 🔐 Login User
-// ============================================================
 export const login = async (req, res) => {
   try {
-    const { userId, studentId, password, macAddress, ipAddress } = req.body;
-    const identifier = userId || studentId;
-
-    if (!identifier || !password) {
-      return res.status(400).json({ success: false, message: 'userId (or studentId) and password are required' });
+    const { studentId, password, macAddress, ipAddress } = req.body;
+    if (!studentId || !password) {
+      return res.status(400).json({ success: false, message: 'studentId and password are required' });
     }
 
-    const user = await User.findOne({ studentId: identifier });
+    const user = await User.findOne({ studentId });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(404).json({ success: false, message: 'The user already exists' });
     }
 
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Invalid credentials' });
+      return res.status(401).json({ success: false, message: 'The password is incorrect' });
     }
 
     if (user.status === 'blocked') {
       return res.status(403).json({ success: false, message: 'User is blocked' });
     }
 
-    const token = signToken(user);
-
-    // =======================================================
-    // 🧩 NAC Integration — Link Device to User
-    // =======================================================
+    // Integrate device logic + enforce device cap
     if (macAddress) {
-      await Device.findOneAndUpdate(
-        { macAddress },
-        { ipAddress, owner: user._id, status: 'active', lastSeen: new Date() },
-        { upsert: true, new: true }
-      );
+      let device = await Device.findOne({ macAddress });
+      const userDevicesCount = user.devices?.length || 0;
 
-      // optional: keep device reference in user document
-      const device = await Device.findOne({ macAddress });
-      if (!user.devices.includes(device._id)) {
+      if (!device) {
+        if (userDevicesCount >= MAX_DEVICES_PER_USER) {
+          return res.status(403).json({ success: false, message: `Device limit exceeded (${MAX_DEVICES_PER_USER})` });
+        }
+        device = await Device.create({ macAddress, ipAddress, student: user._id });
         user.devices.push(device._id);
         await user.save();
+        device.lastSeen = Date.now(); 
+        await device.save();
+
+      } else if (String(device.student) !== String(user._id)) {
+        // Only attach if not already attached; still enforce cap
+        if (!user.devices.some(d => String(d) === String(device._id))) {
+          if (userDevicesCount >= MAX_DEVICES_PER_USER) {
+            return res.status(403).json({ success: false, message: `Device limit exceeded (${MAX_DEVICES_PER_USER})` });
+          }
+          device.student = user._id;
+          if (ipAddress) device.ipAddress = ipAddress;
+          await device.save();
+          user.devices.push(device._id);
+          await user.save();
+        }
+      } else if (ipAddress) {
+        device.ipAddress = ipAddress;
+        await device.save();
       }
     }
 
-    // =======================================================
-    // 🍪 Send JWT as HTTP-only Cookie (optional but secure)
-    // =======================================================
-    res.cookie('token', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
-    });
+    const accessToken = createAccessToken(user);
+    const refreshToken = createRefreshToken(user);
+    setRefreshCookie(res, refreshToken);
 
     return res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
-        token,
+        accessToken,
         user: { id: user._id, studentId: user.studentId, name: user.name, email: user.email, role: user.role }
       }
     });
@@ -114,20 +165,60 @@ export const login = async (req, res) => {
   }
 };
 
-// ============================================================
-// 🚪 Logout (optional helper)
-// ============================================================
+export const refresh = async (req, res) => {
+  try {
+    const token = req.cookies?.refreshToken;
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'No refresh token' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, REFRESH_SECRET);
+    } catch (err) {
+      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    }
+
+    const user = await User.findById(decoded.id);
+    if (!user || user.status === 'blocked') {
+      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    }
+
+    const accessToken = createAccessToken(user);
+    return res.status(200).json({ success: true, message: 'Token refreshed', data: { accessToken } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Refresh failed', error: error.message });
+  }
+};
+
 export const logout = (req, res) => {
-  res.clearCookie('token');
+  res.clearCookie('refreshToken', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/',   
+  });
   return res.status(200).json({ success: true, message: 'Logged out successfully' });
 };
 
-// ============================================================
-// 🧾 Example Role Authorization Middleware
-// ============================================================
-export const authorizeRoles = (...roles) => (req, res, next) => {
-  if (!roles.includes(req.user?.role)) {
-    return res.status(403).json({ success: false, message: 'Not authorized to perform this action' });
+
+export const getProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).populate('devices', 'macAddress ipAddress status');
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    return res.status(200).json({
+      success: true,
+      message: 'Profile fetched',
+      data: {
+        id: user._id,
+        studentId: user.studentId,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        devices: user.devices
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Failed to fetch profile', error: error.message });
   }
-  next();
 };
