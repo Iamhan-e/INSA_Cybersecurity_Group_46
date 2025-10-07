@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import helmet from 'helmet';
+import cookieParser from 'cookie-parser'
 import userRoutes from './routes/userRoutes.js';
 import deviceRoutes from './routes/deviceRoutes.js';
 import connectDB from './config/database.js';
@@ -17,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser())
 
 // CORS with explicit origin
 const allowedOrigin = process.env.CLIENT_ORIGIN || 'http://localhost:5173';
