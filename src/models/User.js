@@ -36,7 +36,13 @@ const userSchema = new mongoose.Schema({
     enum: ['user', 'operator', 'admin']
   },
 
-  devices: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Device' }]
+  devices: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Device' }],
+
+  refreshTokenHash: {
+    type: String,
+    required: false,
+    default: null
+  }
 }, {
   timestamps: true
 });
