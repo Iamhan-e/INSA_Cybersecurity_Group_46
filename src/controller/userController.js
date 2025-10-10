@@ -2,6 +2,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import Device from '../models/Device.js';
+import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -150,6 +151,9 @@ export const login = async (req, res) => {
 
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
+
+    user.refreshTokenHash = await bcrypt.hash(refreshToken, 12);
+    await user.save();
     setRefreshCookie(res, refreshToken);
 
     return res.status(200).json({
@@ -184,14 +188,30 @@ export const refresh = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid refresh token' });
     }
 
-    const accessToken = createAccessToken(user);
-    return res.status(200).json({ success: true, message: 'Token refreshed', data: { accessToken } });
+      const match = user.refreshTokenHash && await bcrypt.compare(token, user.refreshTokenHash);
+    if (!match) {
+      return res.status(401).json({ success: false, message: 'Invalid refresh token' });
+    }
+
+    // rotate tokens: issue new refresh, store hash, set cookie, and return new access
+    const newAccessToken = createAccessToken(user);
+    const newRefreshToken = createRefreshToken(user);
+    user.refreshTokenHash = await bcrypt.hash(newRefreshToken, 12);
+    await user.save();
+    setRefreshCookie(res, newRefreshToken);
+    return res.status(200).json({ success: true, message: 'Token refreshed', data: { accessToken: newAccessToken } });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Refresh failed', error: error.message });
   }
 };
 
 export const logout = (req, res) => {
+
+  // clear cookie and invalidate stored hash
+  if (req.user?.id) {
+    // best-effort async clear; not awaiting to keep logout snappy
+    User.findByIdAndUpdate(req.user.id, { $set: { refreshTokenHash: null } }).catch(() => {});
+  }
   res.clearCookie('refreshToken', {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
