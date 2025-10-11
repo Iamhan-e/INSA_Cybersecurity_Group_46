@@ -42,7 +42,7 @@ const setRefreshCookie = (res, token) => {
     path: '/',
     maxAge
   });
-};//secure HTTP-only cookie on the client's browser.
+};
 
 const getTokenFromHeader = (req) => {
   const auth = req.headers.authorization || '';
@@ -98,73 +98,136 @@ export const register = async (req, res) => {
 export const login = async (req, res) => {
   try {
     const { studentId, password, macAddress, ipAddress } = req.body;
+    
+    console.log('🔐 Login attempt:', { studentId, macAddress, ipAddress, userAgent: req.headers['user-agent'] });
+
+    // ✅ Validate required fields
     if (!studentId || !password) {
       return res.status(400).json({ success: false, message: 'studentId and password are required' });
     }
 
+    // ✅ Find user - FIXED ERROR MESSAGE
     const user = await User.findOne({ studentId });
     if (!user) {
-      return res.status(404).json({ success: false, message: 'The user already exists' });
+      console.log('❌ User not found:', studentId);
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // ✅ Verify password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'The password is incorrect' });
+      console.log('❌ Invalid password for user:', studentId);
+      return res.status(401).json({ success: false, message: 'Invalid password' });
     }
 
+    console.log('✅ Password validated for user:', studentId);
+
+    // ✅ Check if user is blocked
     if (user.status === 'blocked') {
-      return res.status(403).json({ success: false, message: 'User is blocked' });
+      console.log('⛔ Blocked user attempted login:', studentId);
+      return res.status(403).json({ success: false, message: 'User account is blocked' });
     }
 
-    // Integrate device logic + enforce device cap
+    // ✅ Handle device registration (if MAC address provided)
     if (macAddress) {
+      console.log('📱 Processing device registration for MAC:', macAddress);
+      
+      // Check if device already exists
       let device = await Device.findOne({ macAddress });
-      const userDevicesCount = user.devices?.length || 0;
-
+      
       if (!device) {
+        // NEW DEVICE - Check if user has reached device limit
+        const userDevicesCount = user.devices?.length || 0;
         if (userDevicesCount >= MAX_DEVICES_PER_USER) {
-          return res.status(403).json({ success: false, message: `Device limit exceeded (${MAX_DEVICES_PER_USER})` });
+          console.log(`⛔ Device limit exceeded for user ${studentId}: ${userDevicesCount}/${MAX_DEVICES_PER_USER}`);
+          return res.status(403).json({ 
+            success: false, 
+            message: `Device limit exceeded. Maximum ${MAX_DEVICES_PER_USER} devices allowed.` 
+          });
         }
-        device = await Device.create({ macAddress, ipAddress, student: user._id });
+
+        // Create new device
+        console.log('✅ Creating new device:', macAddress);
+        device = await Device.create({ 
+          macAddress, 
+          ipAddress, 
+          student: user._id,
+          lastSeen: new Date()
+        });
+        
         user.devices.push(device._id);
         await user.save();
-        device.lastSeen = Date.now(); 
-        await device.save();
-
-      } else if (String(device.student) !== String(user._id)) {
-        // Only attach if not already attached; still enforce cap
-        if (!user.devices.some(d => String(d) === String(device._id))) {
+        console.log(`✅ Device registered and linked to user ${studentId}`);
+        
+      } else {
+        // EXISTING DEVICE
+        console.log('ℹ️  Device already exists:', macAddress);
+        
+        // Check if device belongs to a different user
+        if (String(device.student) !== String(user._id)) {
+          console.log('⚠️  Device belongs to different user, attempting to reassign...');
+          
+          // Check if current user has space for this device
+          const userDevicesCount = user.devices?.length || 0;
           if (userDevicesCount >= MAX_DEVICES_PER_USER) {
-            return res.status(403).json({ success: false, message: `Device limit exceeded (${MAX_DEVICES_PER_USER})` });
+            console.log(`⛔ Cannot reassign: user ${studentId} at device limit`);
+            return res.status(403).json({ 
+              success: false, 
+              message: `Device limit exceeded. Maximum ${MAX_DEVICES_PER_USER} devices allowed.` 
+            });
           }
+
+          // Reassign device to new user
           device.student = user._id;
           if (ipAddress) device.ipAddress = ipAddress;
+          device.lastSeen = new Date();
           await device.save();
+          
           user.devices.push(device._id);
           await user.save();
+          console.log(`✅ Device reassigned to user ${studentId}`);
+          
+        } else {
+          // Device already belongs to this user - just update lastSeen and IP
+          console.log('✅ Device already linked to this user, updating lastSeen');
+          device.lastSeen = new Date();
+          if (ipAddress) device.ipAddress = ipAddress;
+          await device.save();
         }
-      } else if (ipAddress) {
-        device.ipAddress = ipAddress;
-        await device.save();
       }
+    } else {
+      console.log('ℹ️  No MAC address provided, skipping device registration');
     }
 
+    // ✅ Generate tokens
     const accessToken = createAccessToken(user);
     const refreshToken = createRefreshToken(user);
 
+    // ✅ Store refresh token hash
     user.refreshTokenHash = await bcrypt.hash(refreshToken, 12);
     await user.save();
+    
+    // ✅ Set refresh token cookie
     setRefreshCookie(res, refreshToken);
+
+    console.log('✅ Login successful for user:', studentId);
 
     return res.status(200).json({
       success: true,
       message: 'Login successful',
       data: {
         accessToken,
-        user: { id: user._id, studentId: user.studentId, name: user.name, email: user.email, role: user.role }
+        user: { 
+          id: user._id, 
+          studentId: user.studentId, 
+          name: user.name, 
+          email: user.email, 
+          role: user.role 
+        }
       }
     });
   } catch (error) {
+    console.error('❌ Login error:', error);
     return res.status(500).json({ success: false, message: 'Login failed', error: error.message });
   }
 };
@@ -188,12 +251,12 @@ export const refresh = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Invalid refresh token' });
     }
 
-      const match = user.refreshTokenHash && await bcrypt.compare(token, user.refreshTokenHash);
+    const match = user.refreshTokenHash && await bcrypt.compare(token, user.refreshTokenHash);
     if (!match) {
       return res.status(401).json({ success: false, message: 'Invalid refresh token' });
     }
 
-    // rotate tokens: issue new refresh, store hash, set cookie, and return new access
+    // Rotate tokens: issue new refresh, store hash, set cookie, and return new access
     const newAccessToken = createAccessToken(user);
     const newRefreshToken = createRefreshToken(user);
     user.refreshTokenHash = await bcrypt.hash(newRefreshToken, 12);
@@ -206,10 +269,9 @@ export const refresh = async (req, res) => {
 };
 
 export const logout = (req, res) => {
-
-  // clear cookie and invalidate stored hash
+  // Clear cookie and invalidate stored hash
   if (req.user?.id) {
-    // best-effort async clear; not awaiting to keep logout snappy
+    // Best-effort async clear; not awaiting to keep logout snappy
     User.findByIdAndUpdate(req.user.id, { $set: { refreshTokenHash: null } }).catch(() => {});
   }
   res.clearCookie('refreshToken', {
@@ -221,10 +283,9 @@ export const logout = (req, res) => {
   return res.status(200).json({ success: true, message: 'Logged out successfully' });
 };
 
-
 export const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id).populate('devices', 'macAddress ipAddress status');
+    const user = await User.findById(req.user.id).populate('devices', 'macAddress ipAddress status lastSeen');
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
     return res.status(200).json({
       success: true,
@@ -241,4 +302,4 @@ export const getProfile = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch profile', error: error.message });
   }
-};
+}
