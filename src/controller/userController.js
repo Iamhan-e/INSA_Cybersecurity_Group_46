@@ -97,27 +97,36 @@ export const register = async (req, res) => {
 
 export const login = async (req, res) => {
   try {
-    const { studentId, password, macAddress, ipAddress } = req.body;
+    const { studentId, password, macAddress, ipAddress, isRandomizedMAC } = req.body;
     
-    console.log('🔐 Login attempt:', { studentId, macAddress, ipAddress, userAgent: req.headers['user-agent'] });
+    console.log('🔐 Login attempt:', { studentId, macAddress, ipAddress, isRandomizedMAC, userAgent: req.headers['user-agent'] });
+    
+    // ⚠️  REJECT RANDOMIZED MACs
+    if (isRandomizedMAC === true) {
+      console.log('⚠️  Randomized MAC detected - rejecting login');
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Randomized MAC addresses are not allowed. Please disable MAC randomization for this network and reconnect.' 
+      });
+    }
 
     // ✅ Validate required fields
     if (!studentId || !password) {
       return res.status(400).json({ success: false, message: 'studentId and password are required' });
     }
 
-    // ✅ Find user - FIXED ERROR MESSAGE
+    // ✅ Find user
     const user = await User.findOne({ studentId });
     if (!user) {
       console.log('❌ User not found:', studentId);
-      return res.status(404).json({ success: false, message: 'User not found' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     // ✅ Verify password
     const isMatch = await user.comparePassword(password);
     if (!isMatch) {
       console.log('❌ Invalid password for user:', studentId);
-      return res.status(401).json({ success: false, message: 'Invalid password' });
+      return res.status(401).json({ success: false, message: 'Invalid credentials' });
     }
 
     console.log('✅ Password validated for user:', studentId);
@@ -155,17 +164,36 @@ export const login = async (req, res) => {
           lastSeen: new Date()
         });
         
-        user.devices.push(device._id);
-        await user.save();
+        // Prevent duplicates in user.devices array
+        if (!user.devices.includes(device._id)) {
+          user.devices.push(device._id);
+          await user.save();
+        }
         console.log(`✅ Device registered and linked to user ${studentId}`);
         
       } else {
         // EXISTING DEVICE
         console.log('ℹ️  Device already exists:', macAddress);
         
+        // ✅ NEW: Check if device is blocked
+        if (device.status === 'blocked') {
+          console.log('⛔ Blocked device attempted access:', macAddress);
+          return res.status(403).json({ 
+            success: false, 
+            message: 'This device has been blocked. Please contact administrator.' 
+          });
+        }
+        
         // Check if device belongs to a different user
         if (String(device.student) !== String(user._id)) {
           console.log('⚠️  Device belongs to different user, attempting to reassign...');
+          
+          // ✅ NEW: Remove device from old user's array
+          const oldUserId = device.student;
+          await User.findByIdAndUpdate(oldUserId, {
+            $pull: { devices: device._id }
+          });
+          console.log(`🔄 Removed device from old user ${oldUserId}`);
           
           // Check if current user has space for this device
           const userDevicesCount = user.devices?.length || 0;
@@ -183,8 +211,11 @@ export const login = async (req, res) => {
           device.lastSeen = new Date();
           await device.save();
           
-          user.devices.push(device._id);
-          await user.save();
+          // ✅ NEW: Check for duplicates before adding
+          if (!user.devices.includes(device._id)) {
+            user.devices.push(device._id);
+            await user.save();
+          }
           console.log(`✅ Device reassigned to user ${studentId}`);
           
         } else {
@@ -302,4 +333,4 @@ export const getProfile = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Failed to fetch profile', error: error.message });
   }
-}
+};
