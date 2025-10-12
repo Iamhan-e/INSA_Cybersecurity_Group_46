@@ -1,3 +1,4 @@
+// models/User.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcrypt';
 
@@ -5,15 +6,19 @@ const userSchema = new mongoose.Schema({
   studentId: {
     type: String,
     required: true,
-    unique: true
+    unique: true,
+    trim: true
   },
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true
   },
   email: {
     type: String,
-    required: false
+    required: false,
+    trim: true,
+    lowercase: true
   },
   password: {
     type: String,
@@ -22,38 +27,32 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     default: 'student',
-    enum: ['student', 'admin']
+    enum: ['student', 'admin']  // ✅ FIXED: Removed duplicate role field
   },
   status: {
     type: String,
     default: 'active',
     enum: ['active', 'blocked']
   },
-
-  role: {
-    type: String,
-    default: 'user',
-    enum: ['user', 'operator', 'admin']
-  },
-
-  devices: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Device' }],
-
+  devices: [{ 
+    type: mongoose.Schema.Types.ObjectId, 
+    ref: 'Device' 
+  }],
   refreshTokenHash: {
     type: String,
     required: false,
     default: null
   }
 }, {
-  timestamps: true
+  timestamps: true  // Adds createdAt and updatedAt
 });
 
-// Pre-save hook to hash password
+// ====== PRE-SAVE HOOK: Hash password ======
 userSchema.pre('save', async function(next) {
   // Only hash the password if it has been modified (or is new)
   if (!this.isModified('password')) return next();
   
   try {
-    // Hash password with salt rounds = 12
     const salt = await bcrypt.genSalt(12);
     this.password = await bcrypt.hash(this.password, salt);
     next();
@@ -62,7 +61,7 @@ userSchema.pre('save', async function(next) {
   }
 });
 
-// Method to compare password
+// ====== METHOD: Compare password ======
 userSchema.methods.comparePassword = async function(candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
