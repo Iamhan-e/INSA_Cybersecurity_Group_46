@@ -237,3 +237,4 @@ export const isDeviceOnline = (lastSeen) => {
     return false;
   }
 };
+
