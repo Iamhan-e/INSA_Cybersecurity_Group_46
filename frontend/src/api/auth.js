@@ -1,19 +1,19 @@
-
-// src/api/auth.js
 import axiosInstance from './axios';
 
 // ========================================
-// LOGIN
+// LOGIN (with admin check)
 // ========================================
 export const login = async (studentId, password) => {
   try {
     const response = await axiosInstance.post('/users/login', {
       studentId,
       password
+      // Note: No MAC address sent from React app - only from ESP32
     });
 
     const { accessToken, user } = response.data.data;
 
+    // ⭐ REMOVED: Admin check (let ProtectedRoute handle it)
     // Store token and user info in localStorage
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('user', JSON.stringify(user));
