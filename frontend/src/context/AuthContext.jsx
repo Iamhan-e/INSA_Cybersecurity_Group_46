@@ -1,6 +1,5 @@
-// src/context/AuthContext.jsx
 import { createContext, useState, useEffect } from 'react';
-import { login as apiLogin, logout as apiLogout, getCurrentUser, isAuthenticated as checkAuth } from '../api/auth';
+import { login as apiLogin, logout as apiLogout, getCurrentUser, isAuthenticated as checkAuth, isAdmin } from '../api/auth';
 
 export const AuthContext = createContext(null);
 
@@ -15,11 +14,26 @@ export const AuthProvider = ({ children }) => {
       const authenticated = checkAuth();
       const currentUser = getCurrentUser();
       
-      setIsAuthenticated(authenticated);
-      setUser(currentUser);
+      // ⭐ NEW: Verify user is admin
+      const userIsAdmin = isAdmin();
+      
+      if (authenticated && userIsAdmin) {
+        setIsAuthenticated(true);
+        setUser(currentUser);
+        console.log('🔒 Admin authenticated:', currentUser);
+      } else if (authenticated && !userIsAdmin) {
+        // User is authenticated but not admin - clear auth
+        console.warn('⚠️ Non-admin user detected, clearing auth');
+        localStorage.removeItem('accessToken');
+        localStorage.removeItem('user');
+        setIsAuthenticated(false);
+        setUser(null);
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+      }
+      
       setLoading(false);
-
-      console.log('🔐 Auth initialized:', { authenticated, user: currentUser });
     };
 
     initAuth();
@@ -34,7 +48,7 @@ export const AuthProvider = ({ children }) => {
       if (result.success) {
         setUser(result.data.user);
         setIsAuthenticated(true);
-        console.log('✅ User logged in:', result.data.user);
+        console.log('✅ Admin logged in:', result.data.user);
         return { success: true };
       } else {
         console.error('❌ Login failed:', result.message);
@@ -57,7 +71,7 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       
-      console.log('✅ User logged out');
+      console.log('✅ Admin logged out');
       return { success: true };
     } catch (error) {
       console.error('❌ Logout error:', error);
