@@ -26,8 +26,8 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    default: 'student',
-    enum: ['student', 'admin']  // ✅ FIXED: Removed duplicate role field
+    default: 'admin',
+    enum: ['admin']  // ✅ FIXED: Removed duplicate role field
   },
   status: {
     type: String,
