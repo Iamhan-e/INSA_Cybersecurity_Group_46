@@ -1,8 +1,7 @@
-// src/components/auth/LoginForm.jsx
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../hooks/useAuth';
-import { LogIn, User, Lock, AlertCircle } from 'lucide-react';
+import { LogIn, User, Lock, AlertCircle, Shield } from 'lucide-react';
 import LoadingSpinner from '../common/LoadingSpinner';
 
 const LoginForm = () => {
@@ -51,14 +50,21 @@ const LoginForm = () => {
       {/* Header */}
       <div className="text-center mb-8">
         <div className="inline-flex items-center justify-center w-16 h-16 bg-accent-100 rounded-2xl mb-4">
-          <LogIn className="w-8 h-8 text-accent-600" />
+          <Shield className="w-8 h-8 text-accent-600" />
         </div>
         <h1 className="text-3xl font-bold text-slate-900 mb-2">
-          Welcome Back
+          Admin Portal
         </h1>
         <p className="text-slate-600">
           Sign in to access the admin dashboard
         </p>
+        {/* ⭐ NEW: Admin notice */}
+        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded-lg">
+          <p className="text-xs text-primary-700 flex items-center justify-center gap-2">
+            <Shield className="w-4 h-4" />
+            <span>This portal is for administrators only</span>
+          </p>
+        </div>
       </div>
 
       {/* Login Form */}
@@ -68,14 +74,17 @@ const LoginForm = () => {
           {error && (
             <div className="bg-danger-50 border border-danger-200 rounded-lg p-4 flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-danger-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-danger-700">{error}</p>
+              <div>
+                <p className="text-sm font-medium text-danger-900 mb-1">Access Denied</p>
+                <p className="text-sm text-danger-700">{error}</p>
+              </div>
             </div>
           )}
 
           {/* Student ID Input */}
           <div>
             <label htmlFor="studentId" className="block text-sm font-medium text-slate-700 mb-2">
-              Student ID
+              Admin ID
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -88,7 +97,7 @@ const LoginForm = () => {
                 value={formData.studentId}
                 onChange={handleChange}
                 className="block w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-accent-500 focus:border-transparent transition-colors"
-                placeholder="Enter your student ID"
+                placeholder="Enter your admin ID"
                 disabled={loading}
                 autoComplete="username"
               />
@@ -143,6 +152,9 @@ const LoginForm = () => {
       <div className="mt-6 text-center">
         <p className="text-sm text-slate-500">
           ESP32 Network Access Control System
+        </p>
+        <p className="text-xs text-slate-400 mt-2">
+          Students: Connect via ESP32 captive portal
         </p>
       </div>
     </div>
