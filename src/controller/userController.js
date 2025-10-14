@@ -1,6 +1,6 @@
 // controllers/userController.js
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import User from '../models/';
 import Device from '../models/Device.js';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
@@ -175,7 +175,7 @@ export const login = async (req, res) => {
         // EXISTING DEVICE
         console.log('ℹ️  Device already exists:', macAddress);
         
-        // ✅ NEW: Check if device is blocked
+        // Check if device is blocked
         if (device.status === 'blocked') {
           console.log('⛔ Blocked device attempted access:', macAddress);
           return res.status(403).json({ 
@@ -188,7 +188,7 @@ export const login = async (req, res) => {
         if (String(device.student) !== String(user._id)) {
           console.log('⚠️  Device belongs to different user, attempting to reassign...');
           
-          // ✅ NEW: Remove device from old user's array
+          // Remove device from old user's array
           const oldUserId = device.student;
           await User.findByIdAndUpdate(oldUserId, {
             $pull: { devices: device._id }
@@ -211,7 +211,7 @@ export const login = async (req, res) => {
           device.lastSeen = new Date();
           await device.save();
           
-          // ✅ NEW: Check for duplicates before adding
+          // Check for duplicates before adding
           if (!user.devices.includes(device._id)) {
             user.devices.push(device._id);
             await user.save();
@@ -241,8 +241,9 @@ export const login = async (req, res) => {
     // ✅ Set refresh token cookie
     setRefreshCookie(res, refreshToken);
 
-    console.log('✅ Login successful for user:', studentId);
+    console.log('✅ Login successful for user:', studentId, 'Role:', user.role);
 
+    // ✅ Return success with role information
     return res.status(200).json({
       success: true,
       message: 'Login successful',
@@ -253,7 +254,7 @@ export const login = async (req, res) => {
           studentId: user.studentId, 
           name: user.name, 
           email: user.email, 
-          role: user.role 
+          role: user.role  // ⭐ ESP32 uses this to decide redirect
         }
       }
     });
@@ -262,7 +263,6 @@ export const login = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Login failed', error: error.message });
   }
 };
-
 export const refresh = async (req, res) => {
   try {
     const token = req.cookies?.refreshToken;
