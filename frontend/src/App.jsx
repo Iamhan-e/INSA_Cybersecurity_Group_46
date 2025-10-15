@@ -5,6 +5,7 @@ import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Users from './pages/Users';
+import AddUser from './pages/AddUser';  // ⭐ NEW
 import Devices from './pages/Devices';
 import Activity from './pages/Activity';
 
@@ -27,6 +28,7 @@ function App() {
           >
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="users" element={<Users />} />
+            <Route path="users/add" element={<AddUser />} />  {/* ⭐ NEW */}
             <Route path="devices" element={<Devices />} />
             <Route path="activity" element={<Activity />} />
             <Route index element={<Navigate to="/dashboard" replace />} />
