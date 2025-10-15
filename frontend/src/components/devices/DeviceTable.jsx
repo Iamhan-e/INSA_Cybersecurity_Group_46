@@ -1,9 +1,36 @@
-// src/components/devices/DeviceTable.jsx
-import { Eye, Shield, Ban, Trash2, User, Wifi } from 'lucide-react';
+// src/components/devices/DeviceTable.jsx (UPDATED)
+import { useState, useRef, useEffect } from 'react';
+import { MoreVertical, Eye, Shield, Ban, Trash2, User, Wifi } from 'lucide-react';
 import Badge from '../common/Badge';
 import { formatDateTime, formatMacAddress, formatRelativeTime, isDeviceOnline } from '../../utils/formatters';
 
 const DeviceTable = ({ devices, onViewDetails, onBlockDevice, onDeleteDevice, loading }) => {
+  const [openDropdown, setOpenDropdown] = useState(null);
+  const dropdownRef = useRef(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setOpenDropdown(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const toggleDropdown = (deviceId, event) => {
+    event.stopPropagation();
+    setOpenDropdown(openDropdown === deviceId ? null : deviceId);
+  };
+
+  const handleAction = (action, device, event) => {
+    event.stopPropagation();
+    setOpenDropdown(null);
+    action(device);
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
@@ -44,7 +71,11 @@ const DeviceTable = ({ devices, onViewDetails, onBlockDevice, onDeleteDevice, lo
             {devices.map((device) => {
               const online = isDeviceOnline(device.lastSeen);
               return (
-                <tr key={device._id} className="hover:bg-slate-50 transition-colors">
+                <tr 
+                  key={device._id} 
+                  className="hover:bg-slate-50 transition-colors cursor-pointer"
+                  onClick={() => onViewDetails(device)}
+                >
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm font-mono font-medium text-slate-900">
                       {formatMacAddress(device.macAddress)}
@@ -94,32 +125,60 @@ const DeviceTable = ({ devices, onViewDetails, onBlockDevice, onDeleteDevice, lo
                     <span className="text-sm text-slate-600">{formatDateTime(device.createdAt)}</span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="relative inline-block" ref={openDropdown === device._id ? dropdownRef : null}>
                       <button
-                        onClick={() => onViewDetails(device)}
+                        onClick={(e) => toggleDropdown(device._id, e)}
                         className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
-                        title="View details"
+                        title="Actions"
                       >
-                        <Eye className="w-4 h-4" />
+                        <MoreVertical className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => onBlockDevice(device)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          device.status === 'active'
-                            ? 'text-warning-600 hover:bg-warning-50'
-                            : 'text-success-600 hover:bg-success-50'
-                        }`}
-                        title={device.status === 'active' ? 'Block device' : 'Unblock device'}
-                      >
-                        {device.status === 'active' ? <Ban className="w-4 h-4" /> : <Shield className="w-4 h-4" />}
-                      </button>
-                      <button
-                        onClick={() => onDeleteDevice(device)}
-                        className="p-2 text-danger-600 hover:bg-danger-50 rounded-lg transition-colors"
-                        title="Delete device"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+
+                      {/* Dropdown Menu */}
+                      {openDropdown === device._id && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-10">
+                          {/* View Details */}
+                          <button
+                            onClick={(e) => handleAction(onViewDetails, device, e)}
+                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-100 flex items-center gap-3"
+                          >
+                            <Eye className="w-4 h-4" />
+                            <span>View Details</span>
+                          </button>
+
+                          {/* Block/Unblock */}
+                          <button
+                            onClick={(e) => handleAction(onBlockDevice, device, e)}
+                            className={`w-full px-4 py-2 text-left text-sm hover:bg-slate-100 flex items-center gap-3 ${
+                              device.status === 'active' ? 'text-warning-600' : 'text-success-600'
+                            }`}
+                          >
+                            {device.status === 'active' ? (
+                              <>
+                                <Ban className="w-4 h-4" />
+                                <span>Block Device</span>
+                              </>
+                            ) : (
+                              <>
+                                <Shield className="w-4 h-4" />
+                                <span>Unblock Device</span>
+                              </>
+                            )}
+                          </button>
+
+                          {/* Divider */}
+                          <div className="border-t border-slate-200 my-1"></div>
+
+                          {/* Delete */}
+                          <button
+                            onClick={(e) => handleAction(onDeleteDevice, device, e)}
+                            className="w-full px-4 py-2 text-left text-sm text-danger-600 hover:bg-danger-50 flex items-center gap-3"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                            <span>Delete Device</span>
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </td>
                 </tr>
