@@ -1,8 +1,7 @@
-// ========================================
-// FILE: src/pages/Users.jsx (COMPLETE)
-// ========================================
+// src/pages/Users.jsx (FIXED)
 import { useState, useEffect, useCallback } from 'react';
-import { Users as UsersIcon, RefreshCw, Download } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';  // ⭐ Import
+import { Users as UsersIcon, RefreshCw, Download, UserPlus } from 'lucide-react';  // ⭐ Add UserPlus
 import UserFilters from '../components/users/UserFilters';
 import UserTable from '../components/users/UserTable';
 import UserModal from '../components/users/UserModal';
@@ -12,11 +11,13 @@ import LoadingSpinner from '../components/common/LoadingSpinner';
 import { getAllUsers, updateUserStatus, deleteUser } from '../api/admin';
 
 const Users = () => {
+  const navigate = useNavigate();  // ⭐ Add this INSIDE the component (after the function declaration)
+  
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   
-  // Pagination state
+  // ... rest of your state variables ...
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
@@ -24,7 +25,6 @@ const Users = () => {
     limit: 10
   });
 
-  // Filter state
   const [filters, setFilters] = useState({
     search: '',
     status: '',
@@ -33,16 +33,14 @@ const Users = () => {
     page: 1
   });
 
-  // Debounce search
   const [searchDebounce, setSearchDebounce] = useState('');
-
-  // Modal states
   const [selectedUser, setSelectedUser] = useState(null);
   const [showUserModal, setShowUserModal] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
 
-  // Fetch users
+  // ... all your existing functions (fetchUsers, handleFilterChange, etc.) ...
+
   const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
@@ -76,22 +74,20 @@ const Users = () => {
     fetchUsers();
   }, [fetchUsers]);
 
-  // Debounce search input
   useEffect(() => {
     const timer = setTimeout(() => {
       setSearchDebounce(filters.search);
-      setFilters(prev => ({ ...prev, page: 1 })); // Reset to page 1 on search
+      setFilters(prev => ({ ...prev, page: 1 }));
     }, 500);
 
     return () => clearTimeout(timer);
   }, [filters.search]);
 
-  // Handle filter changes
   const handleFilterChange = (key, value) => {
     setFilters(prev => ({
       ...prev,
       [key]: value,
-      page: 1 // Reset to page 1 when filters change
+      page: 1
     }));
   };
 
@@ -99,18 +95,15 @@ const Users = () => {
     setFilters(prev => ({ ...prev, search: value }));
   };
 
-  // Handle page change
   const handlePageChange = (page) => {
     setFilters(prev => ({ ...prev, page }));
   };
 
-  // View user details
   const handleViewDetails = (user) => {
     setSelectedUser(user);
     setShowUserModal(true);
   };
 
-  // Block/Unblock user
   const handleBlockUser = (user) => {
     const newStatus = user.status === 'active' ? 'blocked' : 'active';
     setConfirmAction({
@@ -125,7 +118,6 @@ const Users = () => {
     setShowConfirmDialog(true);
   };
 
-  // Delete user
   const handleDeleteUser = (user) => {
     setConfirmAction({
       type: 'delete',
@@ -138,7 +130,6 @@ const Users = () => {
     setShowConfirmDialog(true);
   };
 
-  // Confirm action
   const handleConfirmAction = async () => {
     if (!confirmAction) return;
 
@@ -146,7 +137,6 @@ const Users = () => {
       if (confirmAction.type === 'block') {
         const result = await updateUserStatus(confirmAction.user._id, confirmAction.newStatus);
         if (result.success) {
-          // Update local state
           setUsers(prev => 
             prev.map(u => 
               u._id === confirmAction.user._id 
@@ -161,7 +151,6 @@ const Users = () => {
       } else if (confirmAction.type === 'delete') {
         const result = await deleteUser(confirmAction.user._id);
         if (result.success) {
-          // Refresh the list
           fetchUsers();
           console.log('✅ User deleted successfully');
         } else {
@@ -178,13 +167,22 @@ const Users = () => {
 
   return (
     <div className="space-y-6">
-      {/* Page Header */}
+      {/* ⭐ UPDATED Page Header with Add User button */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Users Management</h1>
           <p className="text-slate-600 mt-1">Manage student accounts and permissions</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* ⭐ NEW: Add User Button */}
+          <button
+            onClick={() => navigate('/users/add')}
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>Add User</span>
+          </button>
+          
           <button
             onClick={fetchUsers}
             disabled={loading}
