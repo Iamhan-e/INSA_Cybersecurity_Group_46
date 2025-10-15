@@ -72,26 +72,68 @@ export const authorizeRoles = (...roles) => (req, res, next) => {
 export const register = async (req, res) => {
   try {
     const { studentId, name, email, password, role } = req.body;
+    
+    // Validation
     if (!studentId || !name || !password) {
-      return res.status(400).json({ success: false, message: 'studentId, name and password are required' });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'studentId, name and password are required' 
+      });
     }
-    if (!isStrongPassword(password)) {
-      return res.status(400).json({ success: false, message: 'Password must be at least 8 chars and include letters and numbers' });
+    
+    // Password strength check
+    if (password.length < 8) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Password must be at least 8 characters long' 
+      });
+    }
+    
+    if (!/[A-Za-z]/.test(password) || !/\d/.test(password)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Password must contain both letters and numbers' 
+      });
     }
 
+    // Check if user already exists
     const existing = await User.findOne({ studentId });
     if (existing) {
-      return res.status(409).json({ success: false, message: 'User already exists' });
+      return res.status(409).json({ 
+        success: false, 
+        message: 'User with this Student ID already exists' 
+      });
     }
 
-    const user = await User.create({ studentId, name, email, password, role });
+    // Create user
+    const user = await User.create({ 
+      studentId, 
+      name, 
+      email, 
+      password,  // Will be hashed by pre-save hook
+      role: role || 'student'  // Default to student if not specified
+    });
+    
+    console.log('✅ User registered:', studentId, 'Role:', user.role);
+    
     return res.status(201).json({
       success: true,
       message: 'User registered successfully',
-      data: { id: user._id, studentId: user.studentId, name: user.name, email: user.email, role: user.role }
+      data: { 
+        id: user._id, 
+        studentId: user.studentId, 
+        name: user.name, 
+        email: user.email, 
+        role: user.role 
+      }
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Registration failed', error: error.message });
+    console.error('❌ Registration error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Registration failed', 
+      error: error.message 
+    });
   }
 };
 
