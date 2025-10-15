@@ -1,6 +1,6 @@
 // controllers/userController.js
 import jwt from 'jsonwebtoken';
-import User from '../models/';
+import User from '../models/User.js';
 import Device from '../models/Device.js';
 import bcrypt from 'bcrypt';
 import dotenv from 'dotenv';
@@ -8,10 +8,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const isProd = process.env.NODE_ENV === 'production';
-const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || 'dev_access_secret';
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'dev_refresh_secret';
-const ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES || (isProd ? '15m' : '30m');
-const REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES || '7d';
+const ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+const ACCESS_EXPIRES_IN = process.env.JWT_ACCESS_EXPIRES;
+const REFRESH_EXPIRES_IN = process.env.JWT_REFRESH_EXPIRES;
 const MAX_DEVICES_PER_USER = Number(process.env.MAX_DEVICES_PER_USER || 5);
 
 const isStrongPassword = (pwd) => {
